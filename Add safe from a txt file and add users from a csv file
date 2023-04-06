@@ -18,10 +18,11 @@ Write-Host "Le fichier peut être récupéré dans $exportpath" -NoNewline -Fore
 
  
 
-$safes = Get-Content -Path $exportpath
+$safes = import-csv -Path $exportpath
 
-($safes |Select-Object -Skip 1) | Set-Content $exportpath
 
- 
 
-Foreach (
+Foreach ($safe in $safes)
+{
+ write-host "je suis le safe $Safe.SafeName managé par $Safe.ManagingCPM"
+}
