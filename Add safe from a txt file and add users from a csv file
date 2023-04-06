@@ -1,0 +1,27 @@
+Import-Module psPAS
+
+$BaseURI = https://cs101007.prprivmgmt.intraxa
+
+$exportpath = "c:\temp\safelist.csv"
+
+New-PASSession -UseSharedAuthentication -BaseURI $BaseURI
+
+Write-Host "Connection to $BaseURI OK ! Début de la recherche" -NoNewline -ForegroundColor Yellow
+
+Get-PASSafe -query "123456" | Export-Csv -Path $exportpath -Append
+
+ 
+
+Write-Host "Extraction des coffres répondant au critère de recherche terminée !" -NoNewline -ForegroundColor Yellow
+
+Write-Host "Le fichier peut être récupéré dans $exportpath" -NoNewline -ForegroundColor Green
+
+ 
+
+$safes = Get-Content -Path $exportpath
+
+($safes |Select-Object -Skip 1) | Set-Content $exportpath
+
+ 
+
+Foreach (
