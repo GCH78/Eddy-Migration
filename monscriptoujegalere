@@ -1,0 +1,509 @@
+#Import-Module psPAS
+
+param(
+
+    [Parameter(Mandatory=$false,HelpMessage="Export Safes & Accounts")]
+
+    [switch]$exportsafes,
+
+ 
+
+    [Parameter(Mandatory=$false,HelpMessage="Import Accounts")]
+
+    [switch]$Importaccounts,
+
+ 
+
+    [Parameter(Mandatory=$false,HelpMessage="Create Safes")]
+
+    [switch]$createSafes)
+
+ 
+
+       
+
+    
+
+#Declaration des variables
+
+$BASEURI = https://cs101007.prprivmgmt.intraxa
+
+ 
+
+$DESTURI = https://onepam-pp-ccp.corp.intraxa
+
+ 
+
+$safelist = "c:\temp\safelist.csv"
+
+ 
+
+$accountlist = "C:\temp\Accountlist.csv"
+
+ 
+
+$pwdlist =  "c:\temp\pwdlist.csv"
+
+ 
+
+$Domain = "Yellow.intraxa"
+
+ 
+
+$winplatform = "PPO01-ORG0000-HLO00-TIRB13-PLF02-TAT12-TAQ000-TAM05-TAL02-SMI050-SMM04-TAC02-AMOAM01-EXT00"
+
+ 
+
+$linplatform = "PPO01-ORG0000-HLO00-TIRB12-PLF12-TAT11-TAQ000-TAM05-TAL02-SMI002-SMM05-TAC04-AMOAM05-EXT00"
+
+ 
+
+$sqlplatform = "todefine"
+
+ 
+
+$ssh = @{SSHCertificate = "yes";}
+
+ 
+
+$Trigram = "AGO"
+
+ 
+
+#Generation des tokens de connection
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+$sourcetoken = Get-Passession
+
+ 
+
+New-PASSession -UseSharedAuthentication -BaseURI $DESTURI
+
+$destToken = Get-Passession
+
+ 
+
+#####SAM Model permissions
+
+$Safeadmin = [PSCustomObject]@{ AddAcccounts = $true
+
+UseAccounts = $true
+
+ListAccounts = $true
+
+RetrieveAccounts = $true
+
+UpdateAccounts = $true
+
+UpdateAccountContent = $true
+
+UpdateAccountProperties = $true
+
+InitiateCPMAccountManagementOperations = $true
+
+SpecifyNextAccountContent = $true
+
+RenameAccounts = $true
+
+DeleteAccounts = $true
+
+UnlockAccounts = $true
+
+ManageSafe = $true
+
+ManageSafeMembers = $true
+
+BackupSafe = $true
+
+ViewAuditLog = $true
+
+ViewSafeMembers = $true
+
+RequestsAuthorizationLevel1 = $true
+
+AccessWithoutConfirmation = $true
+
+CreateFolders = $true
+
+DeleteFolders = $true
+
+MoveAccountsAndFolders = $true }
+
+ 
+
+$SafeManager = [PSCustomObject]@{ UseAccounts = $true
+
+ListAccounts = $true
+
+ManageSafe = $true
+
+ManageSafeMembers = $true
+
+}
+
+ 
+
+$AccountAdmin = [PSCustomObject]@{ UseAccounts = $false
+
+ListAccounts = $true
+
+AddAccounts = $true
+
+ViewAuditLog = $true
+
+ViewSafeMembers = $true
+
+UpdateAccounts = $true
+
+UpdateAccountContent = $true
+
+UpdateAccountProperties = $true
+
+InitiateCPMAccountManagementOperations = $true
+
+RenameAccounts = $true
+
+DeleteAccounts = $true
+
+UnlockAccounts = $true
+
+  
+
+}
+
+ 
+
+$PasswordRetrieverBUS = [PSCustomObject]@{ UseAccounts = $true
+
+ListAccounts = $true
+
+RetrieveAccounts = $true
+
+ViewAuditLog = $false
+
+ViewSafeMembers = $false
+
+}
+
+ 
+
+$EvdUser = [PSCustomObject]@{
+
+ListAccounts = $true
+
+ViewAuditLog = $true
+
+ViewSafeMembers = $true
+
+}
+
+ 
+
+$ReportingUser = [PSCustomObject]@{
+
+ListAccounts = $true
+
+ViewAuditLog = $true
+
+ViewSafeMembers = $true
+
+ }
+
+ 
+
+$PUUAdmin = [PSCustomObject]@{
+
+ListAccounts = $true
+
+AddAcccounts = $true
+
+UpdateAccounts = $true
+
+UpdateAccountContent = $true
+
+UpdateAccountProperties = $true
+
+RenameAccounts = $true
+
+DeleteAccounts = $true
+
+CreateFolders = $true
+
+DeleteFolders = $true
+
+ViewAuditLog = $true
+
+ViewSafeMembers = $true
+
+ }
+
+ 
+
+$ShareAIM = [PSCustomObject]@{ AddAcccounts = $true
+
+UseAccounts = $true
+
+ListAccounts = $true
+
+RetrieveAccounts = $true
+
+UpdateAccounts = $true
+
+UpdateAccountContent = $true
+
+UpdateAccountProperties = $true
+
+InitiateCPMAccountManagementOperations = $true
+
+SpecifyNextAccountContent = $true
+
+RenameAccounts = $true
+
+DeleteAccounts = $true
+
+UnlockAccounts = $true
+
+ManageSafe = $true
+
+ManageSafeMembers = $true
+
+BackupSafe = $true
+
+ViewAuditLog = $true
+
+ViewSafeMembers = $true
+
+RequestsAuthorizationLevel = 1
+
+AccessWithoutConfirmation = $true
+
+CreateFolders = $true
+
+DeleteFolders = $true
+
+MoveAccountsAndFolders = $true
+
+}
+
+ 
+
+$YellowGroup = [PSCustomObject]@{ UseAccounts = $true
+
+ListAccounts = $true
+
+RetrieveAccounts = $true
+
+}
+
+ 
+
+#######Fin du SAM Model permissions
+
+ 
+
+##Export des coffres dans un premier temps, puis des comptes.
+
+if ($exportsafes) {
+
+ 
+
+Use-PASSession -Session $sourceToken
+
+Write-Host "Connection to $BaseURI OK ! Début de la recherche" -ForegroundColor Yellow
+
+Get-PASSafe -query "123456_LIN_SUP" | Export-Csv -Path $safelist -Append
+
+Write-Host "Extraction des coffres répondant au critère de recherche terminée !" -ForegroundColor Yellow
+
+ 
+
+### Partie Export des comptes avec mots de passe ###
+
+$importsafes = Import-Csv $safelist
+
+Start-Sleep 3
+
+Write-Host "Début de l'Exportation des comptes en cours" -ForegroundColor Red
+
+ 
+
+foreach($safe in $importsafes){
+
+    Get-PASAccount -safeName $safe.safeName | Export-Csv $accountlist -Append -Force
+
+    Write-Host "Comptes et mots de passe du coffre $($safe.SafeName) récupérés !" -ForegroundColor Yellow
+
+    Start-Sleep 3
+
+    Get-PASAccount -safeName $safe.safeName | Get-PASAccountPassword -Reason "Migration MPI Onepam" | Export-Csv $pwdlist -Append -Force
+
+}
+
+ 
+
+Write-Host "Fin de l'export des coffres et des comptes" -ForegroundColor Green
+
+ 
+
+ 
+
+}
+
+ 
+
+#Safe Migration
+
+if ($createsafes) {
+
+Use-PASSession -Session $destToken
+
+$importsafes = Import-Csv $safelist
+
+Start-Sleep 1
+
+#$ligne = Get-Content -Path $exportpath
+
+#($ligne |Select-Object -Skip 1) | Set-Content $exportpath
+
+ 
+
+Write-Host "Migration des $($safes.count) coffres dans le Vault de Destination en cours" -ForegroundColor Yellow
+
+#Création des coffres + ACL
+
+foreach ($safe in $importsafes){
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention 0 -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Le Safe $($safe.safename) a bien été créé" -ForegroundColor Green
+
+# Partie ACL (à modifier si un nouveau compte est créé)
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+ 
+
+#$YellowGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Les ACL du coffre $($safe.safename) ont bien été ajoutées" -ForegroundColor Green
+
+ 
+
+ 
+
+}
+
+Write-Host "Migration des coffres dans le Vault Onepam terminée" -ForegroundColor green
+
+    }
+
+ 
+
+ 
+
+### Partie Import des comptes ###
+
+if ($Importaccounts) {
+
+    $Accounts = Import-Csv $accountlist
+
+    $pwds = Import-Csv $pwdlist
+
+Write-Host "Début de l'import des comptes" -ForegroundColor Red
+
+Use-PASSession -Session $destToken
+
+ 
+
+foreach($Account in $pwds) {
+
+    $password = ConvertTo-SecureString -String $._$Account.Password -AsPlainText -Force}
+
+       
+
+ foreach($Account in $Accounts){  
+
+    Add-PASAccount -secretType key `
+
+    -secret $Password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram;}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $winplatform `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+    -RemoteMachines $Account.RemoteMachinesAccess`
+
+    -accessRestrictedToRemoteMachines $True
+
+ 
+
+      }
+
+}
+
+  
+
+ 
+
+  
+
+  #  -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram; SSHCertificate="yes";}
+
+  #C_AXA_SILVA=($Account.platformaccountproperties).axa_SILVA
