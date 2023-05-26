@@ -1,76 +1,278 @@
+<#
+
+###########################################################################
+
+ 
+
+NAME:
+
+    OnePam_Migration.PS1 PRODUCTION V3.2
+
+ 
+
+AUTHOR: 
+
+    Eddy BIBIANNE
+
+ 
+
+COMMENT:
+
+    Script used migrate MPI data between SE Regional & Onepam
+
+ 
+
+Prerequisites :
+
+    psPAS V5 minimum (5.5.110)
+
+    pwdlist.csv in c:\temp
+
+ 
+
+Version:
+
+    0.2
+
+ 
+
+USAGE : Mandatory switch : win, lin, EMG, ora, sql
+
+Usage : 1) Onepam_Migration -exportsafes -win
+
+       2) Onepam_Migration -exportaccounts -win
+
+        3) Onepam_Migration -importsafes -win
+
+        4) Onepam_Migration -importaccounts -win       
+
+ 
+
+13/05 Error on some accounts during the password retrieval. Fixed.
+
+###########################################################################
+
+#>
+
+ 
+
 #Import-Module psPAS
 
 param(
 
-    [Parameter(Mandatory=$false,HelpMessage="Export Safes & Accounts")]
+    [Parameter(Mandatory=$false,HelpMessage="Exportsafes - Export the List of Safes from Source Vault")]
 
     [switch]$exportsafes,
 
  
 
-    [Parameter(Mandatory=$false,HelpMessage="Import Accounts")]
+    [Parameter(Mandatory=$false,HelpMessage="ImportSafes - Import the List of Safes on Destination Vault")]
+
+    [switch]$importsafes,
+
+ 
+
+    [Parameter(Mandatory=$false,HelpMessage="Export Accounts -Export List of  Accounts per safe, from Source Vault")]
+
+    [switch]$Exportaccounts,
+
+ 
+
+    [Parameter(Mandatory=$false,HelpMessage="Import Accounts - Import List of Accounts per Safe, from Source Vault")]
 
     [switch]$Importaccounts,
 
+      
+
+    [Parameter(Mandatory=$false,HelpMessage="Transform Accounts - Modify the exported CSV file with new platformproperties")]
+
+    [switch]$transform,
+
  
 
-    [Parameter(Mandatory=$false,HelpMessage="Create Safes")]
+    # Use this switch to delete accounts from safes
 
-    [switch]$createSafes)
+    [Parameter(Mandatory=$false,HelpMessage="Delete Accounts")]
+
+    [switch]$deleteaccounts,
 
  
 
-       
+    # Use this switch to Delete safes created on Onepam Vault (safes created with retention set to 0)
 
-    
+    [Parameter(Mandatory=$false,HelpMessage="Delete Safes")]
 
-#Declaration des variables
+    [switch]$deletesafes,
+
+ 
+
+    # Use this switch to Reconcile accounts via CPM
+
+    [Parameter(Mandatory=$false,HelpMessage="Reconcile Accounts")]
+
+    [switch]$Reconcile,
+
+ 
+
+    # Use this switch to UnManage accounts via CPM
+
+    [Parameter(Mandatory=$false,HelpMessage="Disable CPM Rotation. Remove CPM from Safes")]
+
+    [switch]$DisableCPMAutoManagement,
+
+   
+
+    # Use this switch to Manage accounts via CPM
+
+    [Parameter(Mandatory=$false,HelpMessage="Enable CPM Rotation. Add CPM member of safes")]
+
+    [switch]$EnableCPMAutoManagement,
+
+   
+
+    # Use this switch to export/import Win_SUP safes (contains WINSUP Support Accounts)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$WINSUP,
+
+   
+
+    # Use this switch to export/import Lin_SUP safes (Contains Lin_ops accounts -SSHKey)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$LINSUP,
+
+ 
+
+    # Use this switch to export/import WIN L3ADM/L2ADM safes (WINDOWS)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$WINSQLADMSUP,
+
+ 
+
+    # Use this switch to export/import LIN & ORA L3ADM/L2ADM safes (SSHKEY)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$ORALINADMSUP,
+
+ 
+
+    # Use this switch to export/import ORA_SUP safes  (Contains Lin_dbops accounts -SSHKey)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$ORASUP,
+
+ 
+
+    # Use this switch to export/import SQL_SUP safes  (Contains SQLSUP Support accounts)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$SQLSUP,
+
+ 
+
+     # Use this switch to export/import TLSCHSUP_SUP safes (Contains TLSCHDSUP Support accounts)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$TLSCHDSUP,
+
+ 
+
+    # Use this switch to export/import MSSQL SA safes (Contains SA DB accounts)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$SA,
+
+ 
+
+    # Use this switch to export/import ORACLE SYSTEM safes (Contains SYSTEM & SYS DB accounts)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$SYSTEMSYS,
+
+ 
+
+    # Use this switch to export/import Emergency localadm safes (Contains Windows Localadm Accounts)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$LOCALADM,
+
+   
+
+    # Use this switch to export/import Root safes (Contains Root Linux accounts)
+
+    [Parameter(Mandatory=$false)]
+
+    [Switch]$ROOT)
+
+   
+
+   
+
+######################################################  
+
+############## Variables #############################
+
+ 
 
 $BASEURI = https://cs101007.prprivmgmt.intraxa
 
- 
-
 $DESTURI = https://onepam-pp-ccp.corp.intraxa
-
- 
-
-$safelist = "c:\temp\safelist.csv"
-
- 
-
-$accountlist = "C:\temp\Accountlist.csv"
-
- 
-
-$pwdlist =  "c:\temp\pwdlist.csv"
-
- 
 
 $Domain = "Yellow.intraxa"
 
  
 
-$winplatform = "PPO01-ORG0000-HLO00-TIRB13-PLF02-TAT12-TAQ000-TAM05-TAL02-SMI050-SMM04-TAC02-AMOAM01-EXT00"
+$winlist = "c:\temp\winlist.csv"
+
+$linlist = "c:\temp\linlist.csv"
+
+$sqllist = "c:\temp\sqllist.csv"
+
+$oralist = "c:\temp\oralist.csv"
+
+$localadmlist = "c:\temp\localadmlist.csv"
+
+$lindbopslist = "c:\temp\lindbopslist.csv"
+
+$tlschdlist = "c:\temp\tlschdlist.csv"
+
+$systemlist = "c:\temp\systemlist.csv"
+
+$salist = "c:\temp\salist.csv"
+
+$rootlist =  "c:\temp\rootlist.csv"
+
+$ladmlist =  "c:\temp\ladmlist.csv"
+
+$oraadmlist = "c:\temp\oraadmlist.csv"
 
  
 
-$linplatform = "PPO01-ORG0000-HLO00-TIRB12-PLF12-TAT11-TAQ000-TAM05-TAL02-SMI002-SMM05-TAC04-AMOAM05-EXT00"
+$lin_opsAccountID = "62_3"
+
+$lin_dbopsAccountID = "62_3"
+
+#$lin_opsAccountID = "54_4" (prod)
+
+#$lin_dbopsAccountID = "50_5" (prod)
 
  
 
-$sqlplatform = "todefine"
+###################Connection to Vault ##################
 
  
-
-$ssh = @{SSHCertificate = "yes";}
-
- 
-
-$Trigram = "AGO"
-
- 
-
-#Generation des tokens de connection
 
 New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
 
@@ -84,17 +286,93 @@ $destToken = Get-Passession
 
  
 
-#####SAM Model permissions
+#########################################################
 
-$Safeadmin = [PSCustomObject]@{ AddAcccounts = $true
+ 
+
+############# AXA TRIGRAM CALCULATION####################
+
+ 
+
+$C_AXA_Trigram = $account.safeName
+
+$Trigram = ($C_AXA_Trigram-split "_")[1]
+
+ 
+
+#########################################################
+
+# Platforms Policies
+
+#########################################################
+
+##Windows##
+
+$polWINSUPnn = "PPO01-ORG0000-HLO00-TIRB12-PLF02-TAT11-TAQ000-TAM05-TAL02-SMI050-SMM04-TAC02-AMOAM01-EXT00"
+
+#SQL##
+
+$polSQLSUPnn = "PPO01-ORG0000-HLO00-TIRB13-PLF02-TAT12-TAQ000-TAM05-TAL02-SMI050-SMM04-TAC02-AMOAM01-EXT00"
+
+##LIN_DBOPS##
+
+$pollinopsdbopscert = "PPO01-ORG0000-HLO00-TIRB13-PLF12-TAT12-TAQ000-TAM05-TAL02-SMI002-SMM05-TAC04-AMOAM05-EXT00"
+
+##Emergency Windows##
+
+$pollocaladm = "PPO01-ORG0000-HLO00-TIRB22-PLF02-TAT05-TAQ000-TAM05-TAL01-SMI050-SMM04-TAC02-AMOMA04-EXT00"
+
+##Emergency Linux##
+
+$polroot = "PPO01-ORG0000-HLO00-TIRB22-PLF10-TAT05-TAQ000-TAM05-TAL01-SMI050-SMM04-TAC03-AMOMA04-EXT00"
+
+##SYS##
+
+$polsys ="PPO01-ORG0000-HLO00-TIRB22-PLF17-TAT05-TAQ085-TAM05-TAL01-SMI001-SMM01-TAC01-AMOMA11-EXT00"
+
+$polsysv12 = "PPO01-ORG0000-HLO00-TIRB22-PLF17-TAT05-TAQ091-TAM05-TAL01-SMI001-SMM01-TAC01-AMOMA09-EXT00"
+
+##SYSTEM##
+
+$polsystem = "PPO01-ORG0000-HLO00-TIRB22-PLF17-TAT05-TAQ082-TAM05-TAL01-SMI001-SMM01-TAC01-AMOMA11-EXT00"
+
+$polsystemv12 = "PPO01-ORG0000-HLO00-TIRB22-PLF17-TAT05-TAQ091-TAM05-TAL01-SMI001-SMM01-TAC01-AMOMA11-EXT00"
+
+##SA##
+
+$polsa ="PPO01-ORG0000-HLO00-TIRB22-PLF18-TAT05-TAQ000-TAM05-TAL01-SMI001-SMM01-TAC01-AMOMA09-EXT00"
+
+##Other##
+
+$pollinopsdbopsdom = "PPO01-ORG0000-HLO00-TIRB13-PLF02-TAT12-TAQ000-TAM05-TAL02-SMI050-SMM04-TAC02-AMOAM01-EXT00"
+
+$pollincmdcrdom = "PPO01-ORG0000-HLO00-TIRB13-PLF02-TAT12-TAQ000-TAM05-TAL02-SMI050-SMM04-TAC02-AMOAM01-EXT00"
+
+$pollinadbadom = "PPO01-ORG0000-HLO00-TIRB12-PLF02-TAT11-TAQ000-TAM05-TAL02-SMI050-SMM04-TAC02-AMOAM01-EXT00"
+
+$pollincmdcrcert = "PPO01-ORG0000-HLO00-TIRB13-PLF12-TAT12-TAQ000-TAM05-TAL02-SMI002-SMM05-TAC04-AMOAM05-EXT00"
+
+$pollinadbacert = "PPO01-ORG0000-HLO00-TIRB12-PLF12-TAT11-TAQ000-TAM05-TAL02-SMI002-SMM05-TAC04-AMOAM05-EXT00"
+
+#########################################################
+
+ 
+
+#########################################################
+
+ 
+
+#####SAM Model applied during Safes Creation#############
+
+ 
+
+$Safeadmin = [PSCustomObject]@{AddAcccounts = $true
 
 UseAccounts = $true
 
 ListAccounts = $true
 
 RetrieveAccounts = $true
-
-UpdateAccounts = $true
 
 UpdateAccountContent = $true
 
@@ -132,7 +410,11 @@ MoveAccountsAndFolders = $true }
 
  
 
-$SafeManager = [PSCustomObject]@{ UseAccounts = $true
+$SafeManager = [PSCustomObject]@{
+
+UseAccounts = $true
+
+RetrieveAccounts = $false
 
 ListAccounts = $true
 
@@ -140,11 +422,13 @@ ManageSafe = $true
 
 ManageSafeMembers = $true
 
+ViewSafeMembers = $true
+
 }
 
  
 
-$AccountAdmin = [PSCustomObject]@{ UseAccounts = $false
+$AccountAdmin = [PSCustomObject]@{
 
 ListAccounts = $true
 
@@ -153,8 +437,6 @@ AddAccounts = $true
 ViewAuditLog = $true
 
 ViewSafeMembers = $true
-
-UpdateAccounts = $true
 
 UpdateAccountContent = $true
 
@@ -174,17 +456,19 @@ UnlockAccounts = $true
 
  
 
-$PasswordRetrieverBUS = [PSCustomObject]@{ UseAccounts = $true
+$PasswordRetrieverBUS = [PSCustomObject]@{
+
+UseAccounts = $true
 
 ListAccounts = $true
 
 RetrieveAccounts = $true
 
-ViewAuditLog = $false
+UpdateAccountContent = $true
 
-ViewSafeMembers = $false
+ 
 
-}
+  }
 
  
 
@@ -218,8 +502,6 @@ ListAccounts = $true
 
 AddAcccounts = $true
 
-UpdateAccounts = $true
-
 UpdateAccountContent = $true
 
 UpdateAccountProperties = $true
@@ -247,8 +529,6 @@ UseAccounts = $true
 ListAccounts = $true
 
 RetrieveAccounts = $true
-
-UpdateAccounts = $true
 
 UpdateAccountContent = $true
 
@@ -288,63 +568,217 @@ MoveAccountsAndFolders = $true
 
  
 
-$YellowGroup = [PSCustomObject]@{ UseAccounts = $true
+$SupportGroup = [PSCustomObject]@{
+
+UseAccounts = $true
+
+ListAccounts = $true
+
+RetrieveAccounts = $false
+
+AccessWithoutConfirmation = $false
+
+  }
+
+ 
+
+$EmergencyGroup = [PSCustomObject]@{
+
+UseAccounts = $true
 
 ListAccounts = $true
 
 RetrieveAccounts = $true
 
+AccessWithoutConfirmation = $false
+
 }
 
  
 
-#######Fin du SAM Model permissions
+   
 
- 
+######################################################## Export of Safes from Source Vault (-exportsafes -%Destrole%) ######
 
-##Export des coffres dans un premier temps, puis des comptes.
+######################################################## HElp Message : Modify the query if needed #########################
 
 if ($exportsafes) {
 
- 
-
 Use-PASSession -Session $sourceToken
 
-Write-Host "Connection to $BaseURI OK ! Début de la recherche" -ForegroundColor Yellow
-
-Get-PASSafe -query "123456_LIN_SUP" | Export-Csv -Path $safelist -Append
-
-Write-Host "Extraction des coffres répondant au critère de recherche terminée !" -ForegroundColor Yellow
+Write-Host "Connection to Source Vault established successfully ! Research of the safes list in progress..." -ForegroundColor Yellow
 
  
 
-### Partie Export des comptes avec mots de passe ###
-
-$importsafes = Import-Csv $safelist
-
-Start-Sleep 3
-
-Write-Host "Début de l'Exportation des comptes en cours" -ForegroundColor Red
-
- 
-
-foreach($safe in $importsafes){
-
-    Get-PASAccount -safeName $safe.safeName | Export-Csv $accountlist -Append -Force
-
-    Write-Host "Comptes et mots de passe du coffre $($safe.SafeName) récupérés !" -ForegroundColor Yellow
-
-    Start-Sleep 3
-
-    Get-PASAccount -safeName $safe.safeName | Get-PASAccountPassword -Reason "Migration MPI Onepam" | Export-Csv $pwdlist -Append -Force
+if ($WINSUP) {$win_sup = Get-PASSafe -query "ZZ_AGO_U_8CF39A_WIN_SUP" | Export-Csv -Path $winlist -Append
 
 }
 
  
 
-Write-Host "Fin de l'export des coffres et des comptes" -ForegroundColor Green
+if ($WINSQLADMSUP) {$ladm_sup = Get-PASSafe -query "WIN_L3ADM_SUP" | Export-Csv -Path $ladmlist -Append
+
+$ladm1_sup = Get-PASSafe -query "WIN_L2ADM_SUP" | Export-Csv -Path $ladmlist -Append
+
+$ladm2_sup = Get-PASSafe -query "SQL_L2ADM_SUP" | Export-Csv -Path $ladmlist -Append
+
+$ladm3_sup = Get-PASSafe -query "SQL_L3ADM_SUP" | Export-Csv -Path $ladmlist -Append}
 
  
+
+if ($ORALINADMSUP) {$linuxladm_sup = Get-PASSafe -query "ORA_L3ADM_SUP" | Export-Csv -Path $oraadmlist -Append
+
+$linuxladm1_sup = Get-PASSafe -query "LIN_L3ADM_SUP" | Export-Csv -Path $oraadmlist -Append
+
+}
+
+ 
+
+if ($LINSUP) {$lin_ops = Get-PASSafe -query "123456_LIN_SUP" | Export-Csv -Path $linlist -Append
+
+ }
+
+ 
+
+if ($ORASUP){$ora_sup = Get-PASSafe -query "ZZ_AGO_U_8CF39A_ORA_SUP" | Export-Csv -Path $oralist -Append
+
+}
+
+ 
+
+if ($SQLSUP){$sql_sup = Get-PASSafe -query "ZZ_AGO_U_8CF39A_SQL_SUP" | Export-Csv -Path $sqllist -Append
+
+}
+
+ 
+
+if ($TLSCHDSUP){$tlschd_sup = Get-PASSafe -query "WIN_TLSCHD_SUP" | Export-Csv -Path $tlschdlist -Append
+
+}
+
+ 
+
+if ($SA){$sa_db = Get-PASSafe -query "SQL_DBADM_EMG"
+
+$sa_db| Export-Csv -Path $salist -Append}
+
+ 
+
+if ($SYSTEMSYS){$system_db = Get-PASSafe -query "FR_AFA_U_ORA_DBADM_EMG"
+
+$system_db| Export-Csv -Path $systemlist -Append}
+
+ 
+
+if ($ROOT){$root_lin = Get-PASSafe -query "ZZ_AGO_D_LIN_SRVADM_EMG"
+
+$root_lin| Export-Csv -Path $rootlist -Append}
+
+ 
+
+if ($LOCALADM){$SRVADM = Get-PASSafe -query "ZZ_AGO_D_WIN_SRVADM_EMG"
+
+$SRVADM |Export-Csv -Path $localadmlist -Append}
+
+ 
+
+Write-host "The research has been successfully completed. The list of safes is saved in C:\temp\ " -ForegroundColor green
+
+ 
+
+    }
+
+###########################################################################################################################
+
+ 
+
+########################################################Safe Creation on Dest Vault (-importsafes -%Destrole%)#############
+
+if ($importsafes){
+
+ 
+
+$NumberOfDaysRetention = Read-host "Enter the Safes Retention for creation of safes (0-365)"
+
+ 
+
+if ($importsafes -and $LINSUP){
+
+ 
+
+$linimport = Import-Csv $linlist
+
+Write-Host "The creation of safe(s) on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+use-PASSession -Session $destToken
+
+foreach ($safe in $linimport){
+
+ 
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
 
  
 
@@ -352,33 +786,289 @@ Write-Host "Fin de l'export des coffres et des comptes" -ForegroundColor Green
 
  
 
-#Safe Migration
+}
 
-if ($createsafes) {
+if ($importsafes -and $WINSUP){
+
+ 
+
+$winimport = Import-Csv $winlist
+
+Write-Host "The creation of safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
 
 Use-PASSession -Session $destToken
 
-$importsafes = Import-Csv $safelist
+ 
 
-Start-Sleep 1
+foreach ($safe in $winimport){
 
-#$ligne = Get-Content -Path $exportpath
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
 
-#($ligne |Select-Object -Skip 1) | Set-Content $exportpath
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
 
  
 
-Write-Host "Migration des $($safes.count) coffres dans le Vault de Destination en cours" -ForegroundColor Yellow
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
 
-#Création des coffres + ACL
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
 
-foreach ($safe in $importsafes){
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
 
-Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention 0 -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
 
-Write-Host "Le Safe $($safe.safename) a bien été créé" -ForegroundColor Green
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
 
-# Partie ACL (à modifier si un nouveau compte est créé)
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+if ($importsafes -and $ORASUP){
+
+ 
+
+Use-PASSession -Session $destToken
+
+$oraimport = Import-Csv $oralist
+
+Write-Host "The creation of safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+ 
+
+foreach ($safe in $oraimport){
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+if ($importsafes -and $TLSCHDSUP){
+
+ 
+
+Use-PASSession -Session $destToken
+
+$tlschdimport = Import-Csv $tlschdlist
+
+Write-Host "The creation of safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+ 
+
+foreach ($safe in $tlschdimport){
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+if ($importsafes -and $SA){
+
+ 
+
+Use-PASSession -Session $destToken
+
+$saimport = Import-Csv $salist
+
+Write-Host "The creation of $($safes.count) safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+ 
+
+foreach ($safe in $saimport){
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
 
 $Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
 
@@ -416,9 +1106,9 @@ $ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Reportin
 
 $ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
 
-$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
 
-$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SafeManager -SearchIn Vault -ErrorAction SilentlyContinue
 
 $PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
 
@@ -428,13 +1118,769 @@ $ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonep
 
 $ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
 
- 
-
-#$YellowGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
 
  
 
-Write-Host "Les ACL du coffre $($safe.safename) ont bien été ajoutées" -ForegroundColor Green
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+if ($importsafes -and $SYSTEMSYS){
+
+ 
+
+Use-PASSession -Session $destToken
+
+$systemimport = Import-Csv $systemlist
+
+Write-Host "The creation of safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+ 
+
+foreach ($safe in $systemimport){
+
+ 
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ZZ_AGO_Z_ORA_DBADM_EMG -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+if ($importsafes -and $SQLSUP){
+
+ 
+
+Use-PASSession -Session $destToken
+
+$sqlimport = Import-Csv $sqllist
+
+Write-Host "The creation of safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+ 
+
+foreach ($safe in $sqlimport){
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+if ($importsafes -and $ROOT){
+
+ 
+
+Use-PASSession -Session $destToken
+
+$rootimport = Import-Csv $rootlist
+
+Write-Host "The creation of safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+ 
+
+foreach ($safe in $rootimport){
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EmergencyGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+}
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+if ($importsafes -and $LOCALADM){
+
+ 
+
+Use-PASSession -Session $destToken
+
+$localimport = Import-Csv $localadmlist
+
+Write-Host "The creation of safes on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+ 
+
+foreach ($safe in $localimport){
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EmergencyGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+}
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+if ($importsafes -and $WINSQLADMSUP){
+
+ 
+
+$ladmimport = Import-Csv $ladmlist
+
+Write-Host "The creation of safe(s) on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+use-PASSession -Session $destToken
+
+foreach ($safe in $ladmimport){
+
+ 
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+if ($importsafes -and $ORALINADMSUP){
+
+ 
+
+$ladmimport = Import-Csv $oraadmlist
+
+Write-Host "The creation of safe(s) on the Onepam Vault is in progress..." -ForegroundColor Yellow
+
+use-PASSession -Session $destToken
+
+foreach ($safe in $ladmimport){
+
+ 
+
+Add-PASSafe -SafeName $safe.SafeName -Description $safe.Description -NumberOfDaysRetention $NumberOfDaysRetention -ManagingCPM PasswordManager -ErrorAction SilentlyContinue
+
+Write-Host "Safe $($safe.safename) has been successfully created on Onepam Vault" -ForegroundColor Green
+
+ 
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin2 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Cybadmin -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Administrator -SearchIn Vault -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_06 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_07 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_08 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_09 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$Safeadmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safeadmin_10 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_03 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_04 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$AccountAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName AccountAdmin_05 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_01 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ReportingUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName ReportingUser_02 -SearchIn Vault -ErrorAction SilentlyContinue
+
+$SafeManager | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Safemanager -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PasswordRetrieverBUS | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PasswordRetriever_BUS -SearchIn Vault -ErrorAction SilentlyContinue
+
+$PUUAdmin | Add-PASSafeMember -SafeName $safe.SafeName -MemberName PUUADmin -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$EvdUser | Add-PASSafeMember -SafeName $safe.SafeName -MemberName Evduser -SearchIn Vault -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_01 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$ShareAIM | Add-PASSafeMember -SafeName $safe.SafeName -MemberName SharedAIMonepam_02 -SearchIn Vault -AddAccounts $true -ErrorAction SilentlyContinue
+
+$SupportGroup | Add-PASSafeMember -SafeName $safe.SafeName -MemberName $safe.Safename -SearchIn $Domain
+
+ 
+
+Write-Host "Users and groups have been successfully added on $($safe.safename)" -ForegroundColor Green
+
+ 
+
+}
+
+ 
+
+}
+
+ 
+
+Write-Host "The Safes creation has been successfully completed" -ForegroundColor green
+
+}
+
+    
+
+########################################################Export of Accounts from Source Vault (-exportaccounts -%Destrole%)#
+
+if ($Exportaccounts){
+
+Use-PASSession -Session $sourcetoken
+
+if ($exportaccounts -and $LOCALADM){
+
+$localimport = Import-Csv $localadmlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of Emergency Accounts" -ForegroundColor Red
+
+ 
+
+foreach ($localadmaccount in $localimport){
+
+    Get-PASAccount -safeName $localadmaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties | export-csv -Path 'C:\temp\localadmaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($localadmaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -localadm before importing those accounts" -ForegroundColor Green
+
+}
+
+}
+
+if ($exportaccounts -and $ROOT){
+
+$rootimport = Import-Csv $rootlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of root Accounts" -ForegroundColor Red
+
+ 
+
+foreach ($rootaccount in $rootimport){
+
+    Get-PASAccount -safeName $rootaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties | export-csv -Path 'C:\temp\rootaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($rootaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -root before importing those accounts" -ForegroundColor Green
+
+}
+
+ 
+
+}
+
+if ($exportaccounts -and $WINSUP){
+
+$winimport = Import-Csv $winlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of WIN_SUP Accounts" -ForegroundColor Red
+
+ 
+
+foreach ($winaccount in $winimport){
+
+    Get-PASAccount -safeName $winaccount.SafeName | Select-Object ID, Safename, userName, Name, Address, platformID, platformaccountproperties | Export-Csv -Path 'C:\temp\winaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($winaccount.SafeName) exported successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -winsup before importing those accounts" -ForegroundColor Green
+
+ 
+
+    }
+
+ 
+
+}   
+
+if ($exportaccounts -and $LINSUP){
+
+$linimport = Import-Csv $linlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of Lin_Ops Accounts" -ForegroundColor Red
+
+ 
+
+foreach ($linaccount in $linimport){
+
+    Get-PASAccount -safeName $linaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties, remoteMachinesAccess | export-csv -Path 'C:\temp\linaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($linaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -linsup before importing those accounts" -ForegroundColor Green
+
+   
+
+}
+
+ 
+
+    }
+
+if ($exportaccounts -and $WINSQLADMSUP){
+
+$ladmimport = Import-Csv $ladmlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of WINDOWS and SQL LxADM_SUP Accounts" -ForegroundColor Yellow
+
+ 
+
+foreach ($ladmaccount in $ladmimport){
+
+    Get-PASAccount -safeName $ladmaccount.SafeName | Select-Object ID, Safename, userName, Name, Address, platformID, platformaccountproperties | Export-Csv -Path 'C:\temp\ladmaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($ladmaccount.SafeName) exported successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform WINSQLADMSUP before importing those accounts" -ForegroundColor Green
+
+ 
+
+    }
+
+ 
+
+}
+
+if ($exportaccounts -and $ORALINADMSUP){
+
+$oraadmimport = Import-Csv $oraadmlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of ORA and LIN LxADM_SUP Accounts" -ForegroundColor Yellow
+
+ 
+
+foreach ($oraadmaccount in $oraadmimport){
+
+    Get-PASAccount -safeName $oraadmaccount.SafeName | Select-Object ID, Safename, userName, Name, Address, platformID, platformaccountproperties | Export-Csv -Path 'C:\temp\oraadmaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($oraadmaccount.SafeName) exported successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform ORALINADMSUP before importing those accounts" -ForegroundColor Green
+
+ 
+
+    }
+
+ 
+
+}
+
+if ($exportaccounts -and $ORASUP){
+
+$oraimport = Import-Csv $oralist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of Oracle Accounts" -ForegroundColor Red
+
+ 
+
+foreach ($oraaccount in $oraimport){
+
+    Get-PASAccount -safeName $oraaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties, remoteMachinesAccess | export-csv -Path 'C:\temp\oraaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($oraaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -orasup before importing those accounts" -ForegroundColor Green
+
+}
+
+ 
+
+}
+
+if ($exportaccounts -and $SQLSUP){
+
+$SQLimport = Import-Csv $SQLlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of SQL Accounts" -ForegroundColor Red
+
+ 
+
+foreach ($SQLaccount in $SQLimport){
+
+    Get-PASAccount -safeName $SQLaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties | export-csv -Path 'C:\temp\sqlaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($SQLaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -sqlsup before importing those accounts" -ForegroundColor Green
+
+}
+
+ 
+
+}
+
+if ($exportaccounts -and $TLSCHDSUP){
+
+$tlsimport = Import-Csv $tlschdlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting the export of accounts TLSCHD" -ForegroundColor Red
+
+ 
+
+foreach ($tlschdaccount in $tlsimport){
+
+    Get-PASAccount -safeName $tlschdaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties | export-csv -Path 'C:\temp\tlschd.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($tlschdaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -tlschd before importing those accounts" -ForegroundColor Green
+
+}
 
  
 
@@ -442,45 +1888,123 @@ Write-Host "Les ACL du coffre $($safe.safename) ont bien été ajoutées" -Foreg
 
 }
 
-Write-Host "Migration des coffres dans le Vault Onepam terminée" -ForegroundColor green
+if ($exportaccounts -and $SA){
 
-    }
+$saimport = Import-Csv $salist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of SA Acccounts" -ForegroundColor Red
+
+ 
+
+foreach ($saaccount in $saimport){
+
+    Get-PASAccount -safeName $saaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties | export-csv -Path 'C:\temp\saaccounts.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($saaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -Sa before importing those accounts" -ForegroundColor Green
+
+}
 
  
 
  
 
-### Partie Import des comptes ###
+}
+
+if ($exportaccounts -and $SYSTEMSYS){
+
+$systemimport = Import-Csv $systemlist
+
+New-PASSession -UseSharedAuthentication -BaseURI $BASEURI
+
+Write-Host "Connection to $BaseURI OK ! Starting export of SYSTEM & SYS Accccounts" -ForegroundColor Red
+
+ 
+
+foreach ($systemsysaccount in $systemimport){
+
+    Get-PASAccount -safeName $systemsysaccount.SafeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties | export-csv -Path 'C:\temp\systemsys.csv' -Append -Force
+
+    Write-Host "Accounts in safe $($systemsysaccount.SafeName) get successfully - OK" -ForegroundColor Yellow
+
+    Write-Host "You must now execute -transform -SystemsysAccounts before importing those accounts" -ForegroundColor Green
+
+}
+
+ 
+
+}
+
+ 
+
+   }
+
+ 
+
+########################################################Accounts creation on Dest Vault (-importaccounts -%Destrole%)######
 
 if ($Importaccounts) {
 
-    $Accounts = Import-Csv $accountlist
+   
 
-    $pwds = Import-Csv $pwdlist
+   $Reason = Read-Host "Enter the Reason 'SILVA Request or Incident' for Retrieving Action"
 
-Write-Host "Début de l'import des comptes" -ForegroundColor Red
+    
 
-Use-PASSession -Session $destToken
+   if ($Importaccounts -and $ROOT) {
+
+   $Accounts = $null
+
+   $Accounts = Import-Csv -Path 'C:\temp\rootaccounts.csv'
+
+   Write-Host "THe creation of Root accounts has started" -ForegroundColor Yellow
 
  
 
-foreach($Account in $pwds) {
+   foreach ($account in $Accounts) {
 
-    $password = ConvertTo-SecureString -String $._$Account.Password -AsPlainText -Force}
+    Use-PASSession -Session $sourcetoken
 
-       
+    $PlatformpropertiesAxaSilva = Get-PASAccount -id $account.id | Select-Object platformaccountproperties
 
- foreach($Account in $Accounts){  
+    $Password = $null
 
-    Add-PASAccount -secretType key `
+    Unlock-PASAccount -AccountID $account.id  
 
-    -secret $Password  `
+    $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
 
-    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram;}`
+    
+
+    $C_AXA_Trigram = $account.safeName
+
+    $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+    $Hostname = $account.address
+
+    $C_axa_hostname = ($Hostname.split("."))[0]
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+ 
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram}`
 
     -SafeName $Account.SafeName `
 
-    -PlatformID $winplatform `
+    -PlatformID $Account.platformId `
 
     -Address $Account.Address `
 
@@ -488,22 +2012,1670 @@ foreach($Account in $pwds) {
 
     -automaticManagementEnabled $false `
 
-    -RemoteMachines $Account.RemoteMachinesAccess`
+   
 
-    -accessRestrictedToRemoteMachines $True
+    Write-Host "Account $($Account.Name), has been successfully created on Onepam Vault" -ForegroundColor green
+
+   }
 
  
 
-      }
+ 
 
 }
 
+   if ($Importaccounts -and $LOCALADM) {
+
+ 
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_LOCALADM.csv'
+
+   Write-Host "THe creation of Localadm accounts has started" -ForegroundColor Yellow
+
+ 
+
+   foreach ($account in $Accounts) {
+
+    Use-PASSession -Session $sourcetoken
+
+    $PlatformpropertiesAxaSilva = Get-PASAccount -id $account.id | Select-Object platformaccountproperties
+
+    $Password = $null
+
+    Unlock-PASAccount -AccountID $account.id  
+
+    $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+         
+
+    $C_AXA_Trigram = $account.safeName
+
+    $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+    $Hostname = $account.address
+
+    $C_axa_hostname = ($Hostname.split("."))[0]
+
+ 
+
+    Write-Host "$($Account.userName) is going to be added in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+ 
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram; C_AXA_HostName="$($C_axa_hostname)"}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $Account.platformId `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+   
+
+    Write-Host "Account $($Account.Name), has been successfully created on Onepam Vault" -ForegroundColor green
+
+   }
+
+ 
+
+ 
+
+} 
+
+   if ($Importaccounts -and $ORASUP) {
+
   
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_ORA_SUP.csv'
+
+   Write-Host "THe creation of lin_dbops accounts has started" -ForegroundColor Yellow
+
+   
+
+   foreach ($account in $Accounts) {
+
+   Use-PASSession -Session $SourceToken
+
+   $Platformproperties = $null
+
+   $Platformproperties = Get-PASAccount -id $account.id | Select-Object remoteMachinesAccess,platformAccountproperties
+
+   Get-PASAccount -id $account.id | Unlock-PASAccount
+
+   $retrieve =  Get-PASAccount -id $account.id | Get-PASAccountSSHKey -Reason $Reason
+
+   $SecureKeyPassword = $retrieve | ConvertTo-SecureString -AsPlainText -Force -ErrorAction SilentlyContinue
+
+     
+
+   $C_AXA_Trigram = $account.safeName
+
+   $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+  
+
+   Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+   
+
+   ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+   ####################################
 
  
 
   
 
-  #  -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram; SSHCertificate="yes";}
+    Add-PASAccount -secretType Key `
 
-  #C_AXA_SILVA=($Account.platformaccountproperties).axa_SILVA
+    -secret $SecureKeyPassword `
+
+    -platformAccountProperties @{C_AXA_Trigram="$Trigram"; SSHCertificate="Yes"; C_AXA_Silva="$($Platformproperties.platformAccountproperties.AXA_Silva)"}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $account.PlatformID `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+    -remoteMachines $Platformproperties.remoteMachinesAccess.remoteMachines`
+
+    -accessRestrictedToRemoteMachines $true
+
+ 
+
+    write-host "Account $($Account.Name) has been successfully created on Onepam Vault" -ForegroundColor green
+
+   }
+
+    }
+
+ 
+
+   if ($Importaccounts -and $LINSUP) {
+
+  
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_LIN_SUP.csv'
+
+   Write-Host "THe creation of lin_ops accounts has started" -ForegroundColor Yellow
+
+     
+
+   foreach ($Account in $Accounts) {
+
+   Use-PASSession -Session $SourceToken  
+
+   $Platformproperties = $null
+
+   $Platformproperties = Get-PASAccount -id $account.id | Select-Object remoteMachinesAccess,platformAccountproperties
+
+   Get-PASAccount -id $account.id | Unlock-PASAccount
+
+   $retrieve =  Get-PASAccount -id $account.id | Get-PASAccountSSHKey -Reason $Reason
+
+   $SecureKeyPassword = $retrieve | ConvertTo-SecureString -AsPlainText -Force -ErrorAction SilentlyContinue
+
+     
+
+   $C_AXA_Trigram = $account.safeName
+
+   $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+   Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+    
+
+   ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+   ####################################
+
+    
+
+   
+
+    Add-PASAccount -secretType Key `
+
+    -secret $SecureKeyPassword `
+
+    -platformAccountProperties @{C_AXA_Trigram="$Trigram"; SSHCertificate="Yes"; C_AXA_Silva="$($Platformproperties.platformAccountproperties.AXA_Silva)"}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $account.PlatformID `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+    -remoteMachines $platformproperties.remoteMachinesAccess.remoteMachines`
+
+    -accessRestrictedToRemoteMachines $true
+
+ 
+
+    write-host "Account $($Account.Name), has been successfully created on Onepam Vault" -ForegroundColor green
+
+    }
+
+      
+
+      }      
+
+   
+
+   if ($Importaccounts -and $WINSUP) {
+
+  
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_WIN_SUP.csv'
+
+   Write-Host "The creation of WINSUP accounts has started" -ForegroundColor Yellow
+
+    
+
+   foreach ($Account in $Accounts)  {
+
+    Use-PASSession -Session $sourcetoken   
+
+    $PlatformpropertiesAxaSilva = Get-PASAccount -id $account.id | Select-Object platformaccountproperties
+
+    $Password = $null
+
+    Unlock-PASAccount -AccountID $account.id  
+
+    $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+       
+
+    $C_AXA_Trigram = $account.safeName
+
+    $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+ 
+
+    Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+   
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram; C_AXA_Silva="$($PlatformpropertiesAxaSilva.platformAccountproperties.AXA_Silva)"}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $Account.platformId `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+     
+
+    
+
+    Write-Host "Account $($Account.Name) successfully created on Onepam" -ForegroundColor green
+
+        
+
+     }
+
+   }
+
+  
+
+   if ($Importaccounts -and $WINSQLADMSUP) {
+
+  
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_LADM_SUP.csv'
+
+   Write-Host "The creation of WINDOWS-SQL LADMSUP accounts has started" -ForegroundColor Yellow
+
+    
+
+   foreach ($Account in $Accounts)  {
+
+   Use-PASSession -Session $sourcetoken
+
+   $Password = $null
+
+   Get-PASAccount -id $account.id |Unlock-PASAccount 
+
+   $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+     
+
+   $Hostname = $account.address
+
+   $C_AXA_Trigram = $account.safeName
+
+   $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+   $C_axa_hostname = ($Hostname.split("."))[0]
+
+   $C_AXA_DomainName = ($Hostname.split("."))[1]
+
+ 
+
+   Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+   
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address;C_AXA_HostName=$Account.Address; C_AXA_Trigram=$Trigram}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $Account.platformId `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+         
+
+    Write-Host "Account $($Account.Name) successfully created on Onepam" -ForegroundColor green
+
+        
+
+     }
+
+   }
+
+ 
+
+   if ($Importaccounts -and $ORALINADMSUP) {
+
+  
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_ORALINADM_SUP.csv'
+
+   Write-Host "THe creation of ORA & LIN LxADM_SUP accounts has started" -ForegroundColor Yellow
+
+     
+
+   foreach ($Account in $Accounts) {
+
+   Use-PASSession -Session $SourceToken  
+
+   $Platformproperties = $null
+
+   $Platformproperties = Get-PASAccount -id $account.id | Select-Object platformAccountproperties
+
+   Get-PASAccount -id $account.id | Unlock-PASAccount
+
+   $retrieve =  Get-PASAccount -id $account.id | Get-PASAccountSSHKey -Reason $Reason
+
+   $SecureKeyPassword = $retrieve | ConvertTo-SecureString -AsPlainText -Force -ErrorAction SilentlyContinue
+
+ 
+
+   $C_AXA_Trigram = $account.safeName
+
+   $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+ 
+
+   Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+    
+
+   ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+   ####################################
+
+     
+
+   
+
+    Add-PASAccount -secretType Key `
+
+    -secret $SecureKeyPassword `
+
+    -platformAccountProperties @{C_AXA_Trigram="$Trigram"; SSHCertificate="Yes"}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $account.PlatformID `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+    -remoteMachines $platformproperties.remoteMachinesAccess.remoteMachines`
+
+    -accessRestrictedToRemoteMachines $true
+
+ 
+
+    write-host "Account $($Account.Name), has been successfully created on Onepam Vault" -ForegroundColor green
+
+    }
+
+      
+
+      }   
+
+ 
+
+   if ($Importaccounts -and $SQLSUP) {
+
+  
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_SQL_SUP.csv'
+
+   Write-Host "THe creation of SQLSUP accounts has started" -ForegroundColor Yellow
+
+ 
+
+   foreach ($Account in $Accounts) {
+
+    Use-PASSession -Session $sourcetoken
+
+    $PlatformpropertiesAxaSilva = Get-PASAccount -id $account.id | Select-Object platformaccountproperties
+
+    $Password = $null
+
+    Unlock-PASAccount -AccountID $account.id  
+
+    $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+     
+
+    $C_AXA_Trigram = $Account.safeName
+
+    $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+    Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+ 
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram; C_AXA_Silva="$($PlatformpropertiesAxaSilva.platformAccountproperties.AXA_Silva)"}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $Account.platformId `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+   
+
+    Write-Host "Account $($Account.Name) successfully created on Onepam" -ForegroundColor green
+
+   }
+
+ 
+
+ 
+
+}
+
+   if ($Importaccounts -and $TLSCHDSUP) {
+
+  
+
+   $Accounts = $Null
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_TLSCHDSUP.csv'
+
+   Write-Host "THe creation of TLSCHDSUP accounts has started" -ForegroundColor Yellow
+
+ 
+
+   foreach ($account in $Accounts) {   
+
+    Use-PASSession -Session $sourcetoken
+
+    $Password = $null
+
+    Get-PASAccount -id $account.id | Unlock-PASAccount
+
+    $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+   
+
+    $C_AXA_Trigram = $account.safeName
+
+    $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+ 
+
+    Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+ 
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $Account.platformId `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+   
+
+    Write-Host "Account $($Account.Name) successfully created on Onepam" -ForegroundColor green
+
+   }
+
+        }
+
+   if ($Importaccounts -and $SA) {
+
+  
+
+   $Accounts = $null
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_SA.csv'
+
+   Write-Host "THe creation of SA accounts has started" -ForegroundColor Yellow
+
+ 
+
+   foreach ($account in $Accounts) {
+
+    Use-PASSession -Session $sourcetoken
+
+    $Password = $null
+
+    Unlock-PASAccount -AccountID $account.id  
+
+    $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+   
+
+    $Hostname = $account.address
+
+    $C_AXA_Trigram = $account.safeName
+
+    $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+    $C_axa_hostname = ($Hostname.split("."))[0]
+
+    $C_AXA_DomainName = ($Hostname.split("."))[1]
+
+ 
+
+    Write-Host "$($Account.userName) is going to be created in safe $($Account.SafeName) !" -ForegroundColor DarkYellow
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+ 
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{"LOGONDOMAIN"=$Account.Address; C_AXA_DomainName=$Account.Address; C_AXA_Trigram=$Trigram; C_AXA_HostName="$($C_axa_hostname)"}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $Account.platformId `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+   
+
+    Write-Host "Account $($Account.Name) successfully created on Onepam" -ForegroundColor green
+
+   }
+
+ 
+
+ 
+
+}
+
+   if ($Importaccounts -and $SYSTEMSYS) {
+
+  
+
+   $Accounts = $null
+
+   $Accounts = Import-Csv -Path 'C:\temp\Comptes_SYS.csv'
+
+   Write-Host "The creation of SYS and SYSTEM Accounts has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($account in $Accounts) {
+
+   Use-PASSession -Session $sourcetoken
+
+   $PlatformpropertiesAxaSilva = Get-PASAccount -id $account.id | Select-Object platformaccountproperties
+
+   $Password = $null
+
+   Unlock-PASAccount -AccountID $account.id  
+
+   $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+          
+
+   $Hostname = $account.address
+
+   $C_AXA_Trigram = $account.safeName
+
+   $Trigram = ($C_AXA_Trigram-split "_")[1]
+
+   $C_axa_hostname = ($Hostname.split("."))[0]
+
+   $C_AXA_DomainName = ($Hostname.split("."))[1]
+
+ 
+
+    ####Creation on Destvault###########
+
+    Use-PASSession -Session $destToken
+
+    ####################################
+
+ 
+
+    Add-PASAccount -secretType Password `
+
+    -secret $password  `
+
+    -platformAccountProperties @{Database="$($PlatformpropertiesAxaSilva.platformAccountproperties.Database)"; C_AXA_DomainName=$C_AXA_DomainName; C_AXA_Hostname=$C_axa_hostname; C_AXA_Trigram=$Trigram}`
+
+    -SafeName $Account.SafeName `
+
+    -PlatformID $Account.platformId `
+
+    -Address $Account.Address `
+
+    -Username $Account.Username`
+
+    -automaticManagementEnabled $false `
+
+   
+
+    Write-Host "Account $($Account.Name) successfully created on Onepam" -ForegroundColor green
+
+   }
+
+ 
+
+        }
+
+  }
+
+    
+
+######################################################## Modify the CSV File with good values (-transform -%Destrole%)######
+
+if ($transform){
+
+ 
+
+if ($transform -and $WINSUP){
+
+$WINCSV = import-csv -Path 'C:\temp\winaccounts.csv'
+
+$WINCSV | ForEach-Object {if ($_.platformid -eq "SE_WinDomAcc_SupportAccount_POD"){$_.platformid = "$polWINSUPnn"}
+
+ 
+
+$WINCSV |Export-Csv -Path 'C:\temp\Comptes_WIN_SUP.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_WIN_SUP.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_WIN_SUP.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_WIN_SUP.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_WIN_SUP.csv -Encoding utf8
+
+ 
+
+ 
+
+    }
+
+    write-Host "File 'Comptes_WIN_SUP.csv' has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $WINSQLADMSUP){
+
+$WINCSV = import-csv -Path 'C:\temp\ladmaccounts.csv'
+
+$WINCSV | ForEach-Object {if ($_.platformid -eq "SE_WinDomAcc_SupportAccount_POD"){$_.platformid = "$polWINSUPnn"}
+
+ 
+
+$WINCSV |Export-Csv -Path 'C:\temp\Comptes_LADM_SUP.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_LADM_SUP.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_LADM_SUP.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_LADM_SUP.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_LADM_SUP.csv -Encoding utf8
+
+$ReplaceValues3 = Get-content 'C:\temp\Comptes_LADM_SUP.csv'
+
+$ReplaceValues3 -replace "Hostname","C_AXA_Hostname" | Out-File C:\temp\Comptes_LADM_SUP.csv -Encoding utf8
+
+ 
+
+ 
+
+    }
+
+    write-Host "File 'Comptes_LADM_SUP.csv' has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $ORALINADMSUP){
+
+$LINCSV = import-csv -Path 'C:\temp\oraadmaccounts.csv'
+
+$LINCSV | ForEach-Object {if ($_.platformid -eq "SE_LinSSHCert_SupportAccount_POD"){$_.platformid = "$pollinadbacert"}
+
+$LINCSV |Export-Csv -Path 'C:\temp\Comptes_ORALINADM_SUP.csv'
+
+$LINCSV | ForEach-Object {if ($_.platformid -eq "UnixviaSSHCertificate"){$_.platformid = "$pollinadbacert"}
+
+$LINCSV |Export-Csv -Path 'C:\temp\Comptes_ORALINADM_SUP.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_ORALINADM_SUP.csv'
+
+$ReplaceValues -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_ORALINADM_SUP.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_ORALINADM_SUP.csv'
+
+$ReplaceValues2 -replace "Hostname","C_AXA_Hostname" | Out-File C:\temp\Comptes_ORALINADM_SUP.csv -Encoding utf8
+
+ 
+
+ 
+
+write-Host "File 'Comptes_ORALINADM_SUP.csv' has been modified successfully and can now be used for import - OK" -ForegroundColor Green}
+
+         }
+
+    }
+
+if ($transform -and $LINSUP){
+
+$LINCSV = import-csv -Path 'C:\temp\linaccounts.csv'
+
+$LINCSV | ForEach-Object {if ($_.platformid -eq "SE_LinSSHCert_SupportAccount_POD"){$_.platformid = "$pollinopsdbopscert"}
+
+$LINCSV |Export-Csv -Path 'C:\temp\Comptes_LIN_SUP.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_LIN_SUP.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_LIN_SUP.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_LIN_SUP.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_LIN_SUP.csv -Encoding utf8
+
+ 
+
+write-Host "File 'Comptes_LIN_SUP.csv'has been modified successfully and can now be used for import - OK" -ForegroundColor Green }
+
+}
+
+if ($transform -and $LOCALADM){
+
+$LOCALCSV = import-csv -Path 'C:\temp\localadmaccounts.csv'
+
+$LOCALCSV | ForEach-Object {if ($_.platformid -eq "SE_WinSrvLoAcc_Domain_POD"){$_.platformid = "$pollocaladm"}
+
+ 
+
+$LOCALCSV | Export-Csv -Path 'C:\temp\Comptes_LOCALADM.csv'
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_LOCALADM.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_LOCALADM.csv -Encoding utf8
+
+$ReplaceValues3 = Get-content 'C:\temp\Comptes_LOCALADM.csv'
+
+$ReplaceValues3 -replace "Hostname","C_AXA_Hostname" | Out-File C:\temp\Comptes_LOCALADM.csv -Encoding utf8
+
+ 
+
+ 
+
+    }
+
+    write-Host "File 'Comptes_LOCALADM.csv'has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $ROOT){
+
+$ROOTCSV = import-csv -Path 'C:\temp\rootaccounts.csv'
+
+$ROOTCSV | ForEach-Object {if ($_.platformid -eq "SE_Linux_Root"){$_.platformid = "$polroot"}
+
+ 
+
+$ROOTCSV |Export-Csv -Path 'C:\temp\Comptes_ROOT.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_ROOT.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_ROOT.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_ROOT.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_ROOT.csv -Encoding utf8
+
+$ReplaceValues3 = Get-content 'C:\temp\Comptes_ROOT.csv'
+
+$ReplaceValues3 -replace "Hostname","C_AXA_Hostname" | Out-File C:\temp\Comptes_ROOT.csv -Encoding utf8
+
+ 
+
+ 
+
+    }
+
+    write-Host "File 'Comptes_ROOT.csv'has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $SQLSUP){
+
+$SQLCSV = import-csv -Path 'C:\temp\sqlaccounts.csv'
+
+$SQLCSV | ForEach-Object {if ($_.platformid -eq "SE_WinDomAcc_SupportAccount_POD"){$_.platformid = "$polSQLSUPnn"}
+
+ 
+
+$SQLCSV |Export-Csv -Path 'C:\temp\Comptes_SQL_SUP.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_SQL_SUP.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_SQL_SUP.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_SQL_SUP.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_SQL_SUP.csv -Encoding utf8
+
+ 
+
+ 
+
+ 
+
+    }
+
+    write-Host "File 'Comptes_SQL_SUP.csv'has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $TLSCHDSUP){
+
+$TLSCSV = import-csv -Path 'C:\temp\tlschd.csv'
+
+$TLSCSV | ForEach-Object {if ($_.platformid -eq "SE_WinDomAcc_SupportAccount_POD"){$_.platformid = "$polSQLSUPnn"}
+
+ 
+
+$TLSCSV |Export-Csv -Path 'C:\temp\Comptes_TLSCHD.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_TLSCHD.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_TLSCHD.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_TLSCHD.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_TLSCHD.csv -Encoding utf8
+
+ 
+
+    }
+
+    write-Host "File 'Comptes_TLSCHD.csv' has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $ORASUP){
+
+$ORACSV = import-csv -Path 'C:\temp\oraaccounts.csv'
+
+$ORACSV | ForEach-Object {if ($_.platformid -eq "SE_LinSSHCert_SupportAccount_POD"){$_.platformid = "$pollinopsdbopscert"}
+
+ 
+
+$ORACSV |Export-Csv -Path 'C:\temp\Comptes_ORA_SUP.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_ORA_SUP.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_ORA_SUP.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_ORA_SUP.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_ORA_SUP.csv -Encoding utf8
+
+$ReplaceValues3 = Get-content 'C:\temp\Comptes_ORA_SUP.csv'
+
+ 
+
+ 
+
+    }
+
+    write-Host "File 'Comptes_ORA_SUP.csv'has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $SA){
+
+$SACSV = import-csv -Path 'C:\temp\saaccounts.csv'
+
+$SACSV | ForEach-Object {if ($_.platformid -eq "SE_MsSQL_SA"){$_.platformid = "$polsa"}
+
+ 
+
+$SACSV |Export-Csv -Path 'C:\temp\Comptes_SA.csv'
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_SA.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_SA.csv -Encoding utf8
+
+$ReplaceValues3 = Get-content 'C:\temp\Comptes_SA.csv'
+
+$ReplaceValues3 -replace "Hostname","C_AXA_Hostname" | Out-File C:\temp\Comptes_SA.csv -Encoding utf8
+
+ 
+
+ 
+
+ 
+
+    }
+
+write-Host "File 'Comptes_SA.csv'has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+if ($transform -and $SYSTEMSYS){
+
+$SYSCSV = import-csv -Path 'C:\temp\systemsys.csv'
+
+$SYSCSV | ForEach-Object {if ($_.platformid -eq "SE_Oracle_SYS"){$_.platformid = "$polsys"}
+
+ 
+
+$SYSCSV | ForEach-Object {if ($_.platformid -eq "SE_Oracle_SYSTEM"){$_.platformid = "$polsystem"}
+
+ 
+
+$SYSCSV | Export-Csv -Path 'C:\temp\Comptes_SYS.csv'
+
+$ReplaceValues = Get-content 'C:\temp\Comptes_SYS.csv'
+
+$ReplaceValues -replace 'Axa_Silva','C_Axa_Silva' | Out-File C:\temp\Comptes_SYS.csv -Encoding utf8
+
+$ReplaceValues2 = Get-content 'C:\temp\Comptes_SYS.csv'
+
+$ReplaceValues2 -replace "DomName","C_AXA_DomainName" | Out-File C:\temp\Comptes_SYS.csv -Encoding utf8
+
+$ReplaceValues3 = Get-content 'C:\temp\Comptes_SYS.csv'
+
+$ReplaceValues3 -replace "Hostname","C_AXA_Hostname" | Out-File C:\temp\Comptes_SYS.csv -Encoding utf8
+
+ 
+
+    }
+
+   
+
+}
+
+    write-Host "File 'Comptes_SYS.csv' has been modified successfully and can now be used for import - OK" -ForegroundColor Green
+
+}
+
+}
+
+ 
+
+######################################################## OTHERS USEFUL FUNCTIONS ####################################
+
+ 
+
+if ($deleteaccounts) {
+
+Write-Host "WARNING ! Accounts will be deleted on $DESTURI"  -ForegroundColor Red
+
+if ($WINSUP) {
+
+  
+
+   $AccountsTodelete = Import-Csv $winlist
+
+   Write-Host "THe Deletion of WINSUP accounts based on the '$winlist' has started" -ForegroundColor Yellow
+
+   Use-PASSession -Session $destToken
+
+   foreach ($Safe in $AccountsTodelete){
+
+   Get-PASAccount -safeName $Safe.safeName | Select-Object id,username,safename | Export-Csv 'c:temp\wintodelete.csv' -Append -Force }
+
+   $Delimport = Import-Csv 'c:temp\wintodelete.csv'
+
+   foreach ($Account in $Delimport) {
+
+   Unlock-PASAccount -AccountID $Account.id
+
+   Remove-PASAccount -AccountID $Account.id
+
+        
+
+   Write-Host "Acccount $($Account.Username) successfully deleted from Safe $($Account.SafeName) in Onepam" -ForegroundColor green
+
+   break           
+
+     }
+
+   }
+
+if ($ORASUP) {
+
+  
+
+   $AccountsTodelete = Import-Csv $oralist
+
+   Write-Host "THe Deletion of ORASUP accounts based on the '$oralist' has started" -ForegroundColor Yellow
+
+   Use-PASSession -Session $destToken
+
+   foreach ($Safe in $AccountsTodelete){
+
+   Get-PASAccount -safeName $Safe.safeName | Select-Object id,username,safename | Export-Csv 'c:temp\oratodelete.csv' -Append -Force }
+
+   $Delimport = Import-Csv 'c:temp\oratodelete.csv'
+
+   foreach ($Account in $Delimport) {
+
+   Unlock-PASAccount -AccountID $Account.id
+
+   Remove-PASAccount -AccountID $Account.id
+
+        
+
+   Write-Host "Acccount $($Account.Username) successfully deleted from Safe $($Account.SafeName) in Onepam" -ForegroundColor green
+
+   break           
+
+     }
+
+   }
+
+if ($LINSUP) {
+
+  
+
+   $AccountsTodelete = Import-Csv $linlist
+
+   Write-Host "THe Deletion of LINSUP accounts based on the '$linlist' has started" -ForegroundColor Yellow
+
+   Use-PASSession -Session $destToken
+
+   foreach ($Safe in $AccountsTodelete){
+
+   Get-PASAccount -safeName $Safe.safeName | Select-Object id,username,safename | Export-Csv 'c:temp\lintodelete.csv' -Append -Force }
+
+   $Delimport = Import-Csv 'c:temp\lintodelete.csv'
+
+   foreach ($Account in $Delimport) {
+
+   Unlock-PASAccount -AccountID $Account.id
+
+   Remove-PASAccount -AccountID $Account.id
+
+        
+
+   Write-Host "Acccount $($Account.Username) successfully deleted from Safe $($Account.SafeName) in Onepam" -ForegroundColor green
+
+   break           
+
+     }
+
+   }
+
+if ($SQLSUP) {
+
+  
+
+   $AccountsTodelete = Import-Csv $sqllist
+
+   Write-Host "THe Deletion of SQLSUP accounts based on the '$sqllist' has started" -ForegroundColor Yellow
+
+   Use-PASSession -Session $destToken
+
+   foreach ($Safe in $AccountsTodelete){
+
+   Get-PASAccount -safeName $Safe.safeName | Select-Object id,username,safename | Export-Csv 'c:temp\sqltodelete.csv' -Append -Force }
+
+   $Delimport = Import-Csv 'c:temp\sqltodelete.csv'
+
+   foreach ($Account in $Delimport) {
+
+   Unlock-PASAccount -AccountID $Account.id
+
+   Remove-PASAccount -AccountID $Account.id
+
+        
+
+   Write-Host "Acccount $($Account.Username) successfully deleted from Safe $($Account.SafeName) in Onepam" -ForegroundColor green
+
+   break           
+
+     }
+
+   }
+
+if ($LOCALADM) {
+
+  
+
+   $AccountsTodelete = Import-Csv $localadmlist
+
+   Write-Host "THe Deletion of WINSUP accounts based on the '$localadmlist' has started" -ForegroundColor Yellow
+
+   Use-PASSession -Session $destToken
+
+   foreach ($Safe in $AccountsTodelete){
+
+   Get-PASAccount -safeName $Safe.safeName | Select-Object id,username,safename | Export-Csv 'c:temp\emergencytodelete.csv' -Append -Force }
+
+   $Delimport = Import-Csv 'c:temp\emergencytodelete.csv'
+
+   foreach ($Account in $Delimport) {
+
+   Get-PASAccount -id $Account.id | Unlock-PASAccount
+
+   Remove-PASAccount -AccountID $Account.id
+
+        
+
+   Write-Host "Acccount $($Account.Username) successfully deleted from Safe $($Account.SafeName) in Onepam" -ForegroundColor green
+
+   break           
+
+     }
+
+   }
+
+   }
+
+ 
+
+if ($deletesafes) {
+
+   Use-PASSession -Session $destToken
+
+ 
+
+   if($WINSUP){
+
+   $safesdeletion = Import-Csv $winlist
+
+   Write-Host "THe Deletion of WinSup safes based on '$winlist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   }
+
+   if($LINSUP){
+
+   $safesdeletion = Import-Csv $linlist
+
+   Write-Host "THe Deletion of LinSup safes based on '$linlist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   } 
+
+   if($ORASUP){
+
+   $safesdeletion = Import-Csv $oralist
+
+   Write-Host "THe Deletion of ORASup safes based on '$oralist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   } 
+
+   if($WINSQLADMSUP){
+
+   $safesdeletion = Import-Csv $ladmlist
+
+   Write-Host "THe Deletion of LinSup safes based on '$ladmlist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   } 
+
+   if($SQLSUP){
+
+   $safesdeletion = Import-Csv $sqllist
+
+   Write-Host "THe Deletion of LinSup safes based on '$sqllist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   }
+
+   if($TLSCHDSUP){
+
+   $safesdeletion = Import-Csv $tlschdlist
+
+   Write-Host "THe Deletion of LinSup safes based on '$tlschdlist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   }  
+
+   if($SYSTEMSYS){
+
+   $safesdeletion = Import-Csv $systemlist
+
+   Write-Host "THe Deletion of LinSup safes based on '$systemlist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   }
+
+   if($SA){
+
+   $safesdeletion = Import-Csv $salist
+
+   Write-Host "THe Deletion of LinSup safes based on '$salist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   }
+
+   if($LOCALADM){
+
+   $safesdeletion = Import-Csv $localadmlist
+
+   Write-Host "THe Deletion of LinSup safes based on '$localadmlist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   }
+
+   if($ROOT){
+
+   $safesdeletion = Import-Csv $rootlist
+
+   Write-Host "THe Deletion of Emergency ROOT safes based on '$rootlist' has started" -ForegroundColor Yellow
+
+      
+
+   foreach ($safe in $safesdeletion)  {
+
+   Remove-PASSafe -SafeName $safe.Safename
+
+                
+
+   Write-Host "Safe $($safe.safeName) successfully deleted from Onepam" -ForegroundColor green
+
+  
+
+   }
+
+   }        
+
+     }
+
+  
+
+if ($Reconcile) {
+
+   $ReconcileFile = Read-Host "Enter the full path of the file containing the accounts to reconcile (example:C:\temp\sqlaccounts.csv)"
+
+   $AccountsToReconcile = Import-Csv -Path $ReconcileFile
+
+   Write-Host "Reconciliation of accounts is going to be executed" -ForegroundColor Yellow
+
+   
+
+   foreach ($Account in $AccountsToReconcile) {
+
+   Use-PASSession -Session $SourceToken
+
+  
+
+   $SourceAccounts = Get-PASAccount -safename $account.safeName | Select-Object id, Safename, Address, userName, Name, platformID, platformaccountproperties
+
+   $ReconcileAcccount = $SourceAccounts | ForEach-Object {Invoke-PASCPMOperation -AccountID $account.id -ReconcileTask }
+
+  
+
+   Write-Host "Reconciliation of account $($account.username) have been executed" -ForegroundColor Green
+
+  
+
+   }
+
+   
+
+    }
+
+ 
+
+if ($DisableCPMAutoManagement) {
+
+  
+
+   $DisableImport = Import-Csv -Path 'C:\temp\sqllist.csv'
+
+   Write-Host "The removal of CPM on the safes has started" -ForegroundColor Yellow
+
+   
+
+   foreach ($safe in $DisableImport) {
+
+  
+
+   Use-PASSession -Session $SourceToken
+
+   Remove-PASSafeMember -MemberName "CPM_CM1A003F" -SafeName $safe.safeName -ErrorAction SilentlyContinue
+
+   Write-Host "$($safe.safeName) is now no longer managed by CPM" -ForegroundColor DarkGreen
+
+   }
+
+   
+
+    }
+
+ 
+
+if ($EnableCPMAutoManagement) {
+
+  
+
+   $SafesON = Import-Csv -Path 'C:\temp\.csv'
+
+   Use-PASSession -Session $SourceToken
+
+   Write-Host "The Management of the CPM on the safes is going to be reactivated" -ForegroundColor Yellow 
+
+   foreach ($safe in $SafesON) {
+
+   Remove-PASSafeMember -MemberName "CPM_CM1A003F" -SafeName $safe.safeName -ErrorAction SilentlyContinue
+
+   Write-Host "$($safe.safeName) is now managed by CPM" -ForegroundColor DarkGreen
+
+   $VerifyAccounts = Get-PASAccount -safename $safe.safeName | Select-Object id,Username
+
+   $VerifyAccounts | ForEach-Object {Invoke-PASCPMOperation -VerifyTask -AccountID $_.id
+
+   Write-Host "Account $($_.Username) is now verified by CPM" -ForegroundColor Yellow}
+
+   }
+
+    }
+
+ 
+
+if ($PasswordSyncForWinSql) {
+
+   $PwdSyncFile = Read-Host "Enter the full path of the file containing the safes to synchronized on Onepam (example:C:\temp\sqlaccounts.csv)"
+
+   $AccountsToSync = Import-Csv -Path $PwdSyncFle
+
+   Write-Host "A Password synchronisation(Source/Dest) is going to be executed. Passwords must be static on Source Vault !" -ForegroundColor Red
+
+  
+
+   foreach ($Account in $AccountsToSync) {
+
+   $Password = $null
+
+   Use-PASSession -Session $SourceToken
+
+   Get-PASAccount -id $account.id | select
+
+   Unlock-PASAccount -AccountID $account.id 
+
+   $Password = (Get-PASAccount -id $account.id | Get-PASAccountPassword -Reason $Reason).ToSecureString()
+
+   ###############################################################################################################################################
+
+   Use-PASSession -Session $destToken
+
+   $ToSync = Get-PASAccount -safeName $Account.safeName -search $Account.name
+
+   $ToSync | Invoke-PASCPMOperation -AccountID $Tosync.id -ChangeTask -NewCredentials $Password
+
+   ###############################################################################################################################################
+
+   Write-Host "The Password value of account $($Tosync.username) is synchronized" -ForegroundColor Green
+
+  
+
+   }
+
+   
+
+    }
+
+if ($PasswordSyncForLinOra) {
+
+   $PwdSyncFile = Read-Host "Enter the full path of the file containing the safes to synchronized on Onepam (example:C:\temp\sqlaccounts.csv)"
+
+   $AccountsToSync = Import-Csv -Path $PwdSyncFle
+
+   Write-Host "A Password synchronisation(Source/Dest) is going to be executed. Passwords must be static on Source Vault !" -ForegroundColor Red
+
+  
+
+   foreach ($Account in $AccountsToSync) {
+
+   $Password = $null
+
+   Use-PASSession -Session $SourceToken
+
+   Get-PASAccount -id $Account.id | select
+
+   Unlock-PASAccount -AccountID $Account.id 
+
+   $Password = (Get-PASAccount -id $account.id | Get-PASAccountSSHKey -Reason $Reason) | ConvertTo-SecureString -AsPlainText -Force
+
+   ##################################################################################################################################
+
+   Use-PASSession -Session $destToken
+
+   $ToSync = Get-PASAccount -safeName $Account.safeName -search $Account.name
+
+   $ToSync | Invoke-PASCPMOperation -AccountID $Tosync.id -ChangeTask -NewCredentials $Password
+
+   ##################################################################################################################################
+
+   Write-Host "The Password value of account $($Tosync.username) is synchronized" -ForegroundColor Green
+
+  
+
+   }
+
+   
+
+    }
+
+ 
+
+ 
+
+ 
+
+#################################################################################################################################################
